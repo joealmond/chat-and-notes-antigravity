@@ -3,12 +3,20 @@ import { ConvexError } from 'convex/values'
 import { publicQuery, publicMutation, authMutation, adminMutation } from './lib/customFunctions'
 import { getAuthUserSafe } from './lib/authHelpers'
 import { rateLimiter } from './lib/services/rateLimitService'
+import type { Id } from './_generated/dataModel'
 
 // List all messages (public)
 export const list = publicQuery({
-  args: {},
-  handler: async (ctx) => {
-    return await ctx.db.query('messages').order('desc').take(50)
+  args: { channelId: v.optional(v.id('channels')) },
+  handler: async (ctx, args) => {
+    if (args.channelId !== undefined) {
+      const channelId = args.channelId as Id<'channels'>
+      return await ctx.db.query('messages')
+        .withIndex('by_channel', (q) => q.eq('channelId', channelId))
+        .order('asc')
+        .take(100)
+    }
+    return await ctx.db.query('messages').order('asc').take(100)
   },
 })
 
@@ -17,6 +25,7 @@ export const list = publicQuery({
 export const send = publicMutation({
   args: {
     content: v.string(),
+    channelId: v.optional(v.id('channels')),
   },
   handler: async (ctx, args) => {
     // Content validation
@@ -31,11 +40,16 @@ export const send = publicMutation({
     const rateLimitKey = user?._id || 'anonymous'
     await rateLimiter.limit(ctx, 'sendMessage', { key: rateLimitKey })
 
-    return await ctx.db.insert('messages', {
+    const payload: any = {
       content: trimmed,
       authorId: user?._id,
       authorName: user?.name ?? 'Anonymous',
-    })
+    }
+    if (args.channelId !== undefined) {
+      payload.channelId = args.channelId
+    }
+
+    return await ctx.db.insert('messages', payload)
   },
 })
 

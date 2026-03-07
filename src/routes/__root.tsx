@@ -1,4 +1,4 @@
-import { createRootRouteWithContext, useRouteContext } from '@tanstack/react-router'
+import { createRootRouteWithContext, useRouteContext, Navigate } from '@tanstack/react-router'
 import { Outlet, HeadContent, Scripts } from '@tanstack/react-router'
 import { createServerFn } from '@tanstack/react-start'
 import { ConvexBetterAuthProvider } from '@convex-dev/better-auth/react'
@@ -6,9 +6,10 @@ import { Toaster } from 'sonner'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { ImpersonateProvider } from '@/hooks/use-impersonate'
 import { AdminToolbar } from '@/components/AdminToolbar'
-import { ThemeToggle } from '@/components/ThemeToggle'
+import { AppSidebar } from '@/components/AppSidebar'
 import { authClient } from '@/lib/auth-client'
 import { getToken } from '@/lib/auth-server'
+import { LogIn } from 'lucide-react'
 import type { QueryClient } from '@tanstack/react-query'
 import type { ConvexQueryClient } from '@convex-dev/react-query'
 
@@ -33,8 +34,8 @@ export const Route = createRootRouteWithContext<{
     links: [{ rel: 'icon', href: '/favicon.ico' }],
     scripts: [
       {
-        // Prevent dark mode flash (FOUC) by applying theme before paint
-        children: `(function(){try{var t=localStorage.getItem('theme-preference');var d=t==='dark'||(t!=='light'&&matchMedia('(prefers-color-scheme:dark)').matches);document.documentElement.classList.toggle('dark',d)}catch(e){}}())`,
+        // Enforce dark mode permanently
+        children: `document.documentElement.classList.add('dark');`,
       },
     ],
   }),
@@ -64,16 +65,38 @@ function RootComponent() {
       authClient={authClient}
       initialToken={context.token}
     >
-      <html lang="en" suppressHydrationWarning>
+      <html lang="en" suppressHydrationWarning className="dark">
         <head>
           <HeadContent />
         </head>
-        <body className="min-h-screen bg-background antialiased">
+        <body className="min-h-screen bg-background antialiased flex flex-col h-screen overflow-hidden">
           <ImpersonateProvider>
             <ErrorBoundary>
-              <Outlet />
+              {!context.isAuthenticated ? (
+                <div className="flex flex-1 items-center justify-center bg-background">
+                  <div className="max-w-md w-full p-8 border border-border bg-card shadow-none">
+                    <h1 className="text-2xl font-bold mb-6 text-center text-foreground">Sign In Required</h1>
+                    <p className="text-muted-foreground text-center mb-8">
+                      You must be signed in to access the Productivity Ecosystem.
+                    </p>
+                    <button
+                      onClick={() => authClient.signIn.social({ provider: 'google' })}
+                      className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-primary text-primary-foreground font-medium hover:bg-primary/90 transition-colors"
+                    >
+                      <LogIn className="w-5 h-5" />
+                      Sign in with Google
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex w-full h-full">
+                  <AppSidebar />
+                  <main className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
+                    <Outlet />
+                  </main>
+                </div>
+              )}
             </ErrorBoundary>
-            <ThemeToggle />
             <AdminToolbar />
             <Toaster />
           </ImpersonateProvider>
@@ -83,3 +106,4 @@ function RootComponent() {
     </ConvexBetterAuthProvider>
   )
 }
+
